@@ -3,17 +3,19 @@ from utils.auth_utils import validate_token_middleware
 from config import Config
 from langchain_groq import ChatGroq
 import json
-import os
+import aiohttp
+import re
 
 recommendation_bp = Blueprint('recommendation', __name__)
 
 @recommendation_bp.route('/getonly', methods=['GET'])
 @validate_token_middleware()
-def get_recommendations():
+async def get_recommendations():
     user_id = request.user_id
     
     try:
-        statistics = Config.redis_client.hget(f"student:{user_id}", "statistics")
+        redis_client = await Config.get_redis_client()
+        statistics = await redis_client.hget(f"student:{user_id}", "statistics")
         
         if not statistics:
             return jsonify({"message": "No statistics found for the provided user."}), 404
@@ -53,7 +55,7 @@ def get_recommendations():
             groq_api_key=Config.GROQ_API_KEY
         )
         
-        response = llm.invoke(prompt)
+        response = await llm.ainvoke(prompt)
         recommendations_raw = response.content if hasattr(response, 'content') else str(response)
 
         try:
@@ -71,7 +73,7 @@ def get_recommendations():
         return jsonify({"message": f"An error occurred: {str(e)}"}), 500
 
 @recommendation_bp.route('/youtube_videos', methods=['POST', 'OPTIONS'])
-def youtube_videos():
+async def youtube_videos():
     if request.method == 'OPTIONS':
         return jsonify({'status': 'ok'}), 200
 
@@ -95,7 +97,7 @@ def youtube_videos():
         
         result = {}
         for topic in topics:
-            video_urls = search_youtube_videos(topic, max_results=3)
+            video_urls = await search_youtube_videos(topic, max_results=3)
             valid_urls = [url for url in video_urls if is_valid_youtube_url(url)]
             result[topic] = valid_urls[:3]
         
@@ -116,9 +118,7 @@ def youtube_videos():
             "error": str(e)
         }), 500
 
-def search_youtube_videos(topic, max_results=3):
-    import requests
-    import re
+async def search_youtube_videos(topic, max_results=3):
     url = "https://google.serper.dev/videos"
     payload = {"q": f"{topic} tutorial"}
     headers = {
@@ -126,16 +126,17 @@ def search_youtube_videos(topic, max_results=3):
         "Content-Type": "application/json"
     }
     try:
-        response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-        
-        if "videos" not in data:
-            return []
-        
-        urls = [video.get("link", "") for video in data.get("videos", [])[:max_results]]
-        return urls
-    except requests.RequestException as e:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, headers=headers) as response:
+                response.raise_for_status()
+                data = await response.json()
+                
+                if "videos" not in data:
+                    return []
+                
+                urls = [video.get("link", "") for video in data.get("videos", [])[:max_results]]
+                return urls
+    except aiohttp.ClientError as e:
         print(f"Serper API error for {topic}: {e}")
         return []
 

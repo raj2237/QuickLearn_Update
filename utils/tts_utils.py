@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import html
 import re
 import time
+from threading import Thread
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

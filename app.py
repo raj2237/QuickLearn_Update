@@ -6,6 +6,7 @@ from routes.transcript_routes import transcript_bp
 from routes.file_routes import file_bp
 from routes.recommendation_routes import recommendation_bp
 from routes.question_bank_routes import question_bank_bp
+from asgiref.wsgi import WsgiToAsgi
 
 def create_app():
     app = Flask(__name__)
@@ -33,11 +34,14 @@ def create_app():
     app.register_blueprint(question_bank_bp, url_prefix='/api')
 
     @app.route('/', methods=['GET'])
-    def health():
+    async def health():
         return {"status": "ok"}
 
     return app
 
+app = create_app()
+asgi_app = WsgiToAsgi(app)
+
 if __name__ == '__main__':
-    app = create_app()
-    app.run(debug=True, port=5001)
+    import uvicorn
+    uvicorn.run("app:asgi_app", host="0.0.0.0", port=5001, workers=4)

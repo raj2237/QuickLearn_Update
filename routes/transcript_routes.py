@@ -7,7 +7,7 @@ from langchain_groq import ChatGroq
 transcript_bp = Blueprint('transcript', __name__)
 
 @transcript_bp.route('/chat_trans', methods=['POST', 'OPTIONS'])
-def chat_with_transcript():
+async def chat_with_transcript():
     if request.method == 'OPTIONS':
         return '', 204
 
@@ -23,7 +23,7 @@ def chat_with_transcript():
         if not youtube_link:
             return jsonify({'error': 'Missing YouTube link'}), 400
 
-        transcript, language = get_and_enhance_transcript(youtube_link, model_type)
+        transcript, language = await get_and_enhance_transcript(youtube_link, model_type)
         
         if "Error" in transcript:
             return jsonify({'error': transcript}), 400
@@ -55,7 +55,7 @@ def chat_with_transcript():
             question=question
         )
 
-        response = groq_model.invoke(formatted_prompt)
+        response = await groq_model.ainvoke(formatted_prompt)
 
         return jsonify({
             'answer': response.content,
@@ -66,16 +66,16 @@ def chat_with_transcript():
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
 @transcript_bp.route("/generate_mind_map", methods=['GET'])
-def generate_mind_map_endpoint():
+async def generate_mind_map_endpoint():
     video_url = request.args.get('video_url')
 
     if not video_url:
         return jsonify({"error": "No video URL provided"}), 400
 
-    transcript = fetch_youtube_transcript(video_url)
+    transcript = await fetch_youtube_transcript(video_url)
     if isinstance(transcript, dict) and "error" in transcript:
         return jsonify(transcript), 400
 
-    mind_map = generate_mind_map(transcript)
+    mind_map = await generate_mind_map(transcript)
    
     return jsonify(mind_map)

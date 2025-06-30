@@ -1,3 +1,4 @@
+import aiohttp
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import TextFormatter
 from langchain_groq import ChatGroq
@@ -8,7 +9,7 @@ from config import Config
 
 formatter = TextFormatter()
 
-def get_and_enhance_transcript(youtube_url, model_type='gemini'):
+async def get_and_enhance_transcript(youtube_url, model_type='gemini'):
     try:
         video_id = youtube_url.split('v=')[-1]
         transcript = None
@@ -16,7 +17,7 @@ def get_and_enhance_transcript(youtube_url, model_type='gemini'):
 
         for lang in ['hi', 'en']:
             try:
-                transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[lang])
+                transcript = await YouTubeTranscriptApi.get_transcript(video_id, languages=[lang])
                 language = lang
                 break
             except:
@@ -40,12 +41,12 @@ def get_and_enhance_transcript(youtube_url, model_type='gemini'):
                 temperature=0,
                 groq_api_key=Config.GROQ_API_KEY
             )
-            response = groq_model.invoke(prompt)
+            response = await groq_model.ainvoke(prompt)
             enhanced_transcript = response.content if hasattr(response, 'content') else str(response)
         else:
             genai.configure(api_key=Config.GENAI_API_KEY)
             gemini_model = genai.GenerativeModel('gemini-2.0-flash')
-            response = gemini_model.generate_content(prompt)
+            response = await gemini_model.generate_content_async(prompt)
             enhanced_transcript = response.text if hasattr(response, 'text') else str(response)
         
         return enhanced_transcript, language
@@ -53,7 +54,7 @@ def get_and_enhance_transcript(youtube_url, model_type='gemini'):
         print(f"Error in get_and_enhance_transcript: {str(e)}")
         return None, None
 
-def generate_summary_and_quiz(transcript, num_questions, language, difficulty, model_type='gemini'):
+async def generate_summary_and_quiz(transcript, num_questions, language, difficulty, model_type='gemini'):
     try:
         if 'Fake transcript' in transcript:
             return {"summary": {}, "questions": {difficulty: []}}
@@ -100,12 +101,12 @@ def generate_summary_and_quiz(transcript, num_questions, language, difficulty, m
                 temperature=0,
                 groq_api_key=Config.GROQ_API_KEY
             )
-            response = groq_model.invoke(prompt)
+            response = await groq_model.ainvoke(prompt)
             response_content = response.content if hasattr(response, 'content') else str(response)
         else:
             genai.configure(api_key=Config.GENAI_API_KEY)
             gemini_model = genai.GenerativeModel('gemini-2.0-flash')
-            response = gemini_model.generate_content(prompt)
+            response = await gemini_model.generate_content_async(prompt)
             response_content = response.text if hasattr(response, 'text') else str(response)
 
         json_match = re.search(r'\{.*\}', response_content, re.DOTALL)
@@ -123,15 +124,15 @@ def generate_summary_and_quiz(transcript, num_questions, language, difficulty, m
         print(f"Error in generate_summary_and_quiz: {str(e)}")
         return None
 
-def fetch_youtube_transcript(video_url):
+async def fetch_youtube_transcript(video_url):
     try:
         video_id = video_url.split("v=")[-1]
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'hi'])
+        transcript = await YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'hi'])
         return " ".join([entry["text"] for entry in transcript])
     except Exception as e:
         return {"error": f"Error fetching transcript: {str(e)}"}
 
-def generate_mind_map(content):
+async def generate_mind_map(content):
     prompt = f"""
     Extract key concepts from the following text and structure them into a JSON-based mind map.
     Organize it into: "Topic" -> "Subtopics" -> "Details".
@@ -154,7 +155,7 @@ def generate_mind_map(content):
         groq_api_key=Config.GROQ_API_KEY
     )      
 
-    response = llm.invoke(prompt)
+    response = await llm.ainvoke(prompt)
     raw_json = response.content.strip() if hasattr(response, "content") else str(response)
     cleaned_json_str = raw_json.replace("```json", "").replace("```", "").replace("\n", "").strip()
 

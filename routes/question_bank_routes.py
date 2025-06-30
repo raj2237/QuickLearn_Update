@@ -6,6 +6,7 @@ from agno.models.groq import Groq
 from agno.tools.duckduckgo import DuckDuckGoTools
 import os
 import random
+import aiofiles
 import io
 from contextlib import redirect_stdout
 import unicodedata
@@ -14,16 +15,20 @@ import re
 question_bank_bp = Blueprint('question_bank', __name__)
 
 @question_bank_bp.route('/paper_upload', methods=['POST'])
-def upload_pdf():
+async def upload_pdf():
     if 'file' not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
     file = request.files['file']
     file_path = os.path.join(Config.UPLOAD_FOLDER, file.filename)
-    file.save(file_path)
+    os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+    
+    async with aiofiles.open(file_path, 'wb') as f:
+        await f.write(file.read())
+    
     return jsonify({"message": "File uploaded successfully", "file_path": file_path})
 
 @question_bank_bp.route('/generate_paper', methods=['POST'])
-def generate_papers():
+async def generate_papers():
     data = request.json
     pdf_path = data.get("file_path")
     num_questions = data.get("num_questions", 10)
@@ -33,11 +38,11 @@ def generate_papers():
         return jsonify({"error": "Invalid file path"}), 400
     
     try:
-        extracted_questions = extract_questions_from_pdf(pdf_path)
+        extracted_questions = await extract_questions_from_pdf(pdf_path)
         if not extracted_questions:
             return jsonify({"error": "No valid questions found in PDF"}), 400
         
-        generated_questions = generate_questions(extracted_questions, num_questions * num_papers)
+        generated_questions = await generate_questions(extracted_questions, num_questions * num_papers)
         all_questions = extracted_questions + generated_questions
         random.shuffle(all_questions)
         
@@ -51,11 +56,11 @@ def generate_papers():
             selected_questions = all_questions[start_idx:end_idx]
             if len(selected_questions) < num_questions:
                 remaining = num_questions - len(selected_questions)
-                extra_questions = generate_questions(extracted_questions, remaining)
+                extra_questions = await generate_questions(extracted_questions, remaining)
                 selected_questions.extend(extra_questions)
             
             paper_path = os.path.join(Config.OUTPUT_FOLDER, f"question_paper_set_{i+1}.pdf")
-            create_question_paper(selected_questions, paper_path, i + 1)
+            await create_question_paper(selected_questions, paper_path, i + 1)
             pdf_paths.append(paper_path)
         
         return jsonify({"message": "Papers generated", "files": pdf_paths})
@@ -64,14 +69,14 @@ def generate_papers():
         return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
 @question_bank_bp.route('/download/<filename>', methods=['GET'])
-def download_paper(filename):
+async def download_paper(filename):
     file_path = os.path.join(Config.OUTPUT_FOLDER, filename)
     if os.path.exists(file_path):
-        return send_file(file_path, as_attachment=True)
+        return await send_file(file_path, as_attachment=True)
     return jsonify({"error": "File not found"}), 404
 
 @question_bank_bp.route('/question_bank', methods=['POST', 'OPTIONS'])
-def generate_question_bank():
+async def generate_question_bank():
     if request.method == 'OPTIONS':
         return jsonify({'status': 'ok'}), 200
         
@@ -99,14 +104,14 @@ def generate_question_bank():
             "Focus on numerical questions over theoretical ones."
         )
  
-        result_text = get_agent_response(agent, prompt)
+        result_text = await get_agent_response(agent, prompt)
         
         if result_text.startswith("1. Error:") or result_text.startswith("1. An error occurred"):
             return jsonify({"error": "Failed to generate questions"}), 500
         
-        pdf_path = create_question_bank_pdf(result_text, subject)
+        pdf_path = await create_question_bank_pdf(result_text, subject)
         
-        return send_file(
+        return await send_file(
             pdf_path,
             as_attachment=True,
             download_name=f"{subject.replace(' ', '_')}_Questions.pdf",
@@ -137,11 +142,11 @@ def initialize_question_bank_agent():
     except Exception as e:
         raise Exception(f"Error initializing agent: {str(e)}")
 
-def get_agent_response(agent, prompt):
+async def get_agent_response(agent, prompt):
     try:
         buffer = io.StringIO()
         with redirect_stdout(buffer):
-            agent.print_response(prompt)
+            await agent.aprint_response(prompt)
         response = buffer.getvalue()
         
         if not response:

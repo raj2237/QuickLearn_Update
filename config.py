@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
-from pymongo import MongoClient
-import redis
+from motor.motor_asyncio import AsyncIOMotorClient
+from redis.asyncio import Redis
 
 load_dotenv()
 
@@ -12,14 +12,17 @@ class Config:
     GENAI_API_KEY = os.getenv('GENAI_API_KEY')
     SERPER_API_KEY = os.getenv('SERPER_API_KEY', '85a684d9cfcddab4886460954ef36f054053529b')
     HUGGINGFACE_TOKEN = os.getenv('HUGGINGFACE_TOKEN')
+    PINECONE_API_KEY = os.getenv('PINECONE_API_KEY')
+    PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT', 'us-east-1')  # Default to valid AWS region for free plan
     
     # MongoDB setup
-    mongo_client = MongoClient(MONGODB_URI)
+    mongo_client = AsyncIOMotorClient(MONGODB_URI)
     db = mongo_client['quicklearnai']
     topics_collection = db['statistics']
     
     # Redis setup
-    redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
+    async def get_redis_client():
+        return await Redis.from_url('redis://localhost:6379/0', decode_responses=True)
     
     # Folder paths
     UPLOAD_FOLDER = 'Uploads'

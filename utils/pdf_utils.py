@@ -10,17 +10,20 @@ from config import Config
 import re
 from pptx import Presentation
 import os
+import aiofiles
 
-def extract_text_from_pdf(pdf_file):
+async def extract_text_from_pdf(pdf_file):
     reader = fitz.open(pdf_file)
-    return " ".join(page.get_text("text") for page in reader if page.get_text("text"))
+    text = " ".join(page.get_text("text") for page in reader if page.get_text("text"))
+    reader.close()
+    return text
 
-def extract_text_from_pptx(pptx_path):
+async def extract_text_from_pptx(pptx_path):
     prs = Presentation(pptx_path)
     text = [shape.text for slide in prs.slides for shape in slide.shapes if hasattr(shape, "text")]
     return " ".join(text)
 
-def extract_questions_from_pdf(pdf_path):
+async def extract_questions_from_pdf(pdf_path):
     try:
         doc = fitz.open(pdf_path)
         questions = []
@@ -73,7 +76,7 @@ def extract_questions_from_pdf(pdf_path):
     except Exception as e:
         return [f"Error extracting questions: {str(e)}"]
 
-def generate_questions(extracted_questions, num_questions):
+async def generate_questions(extracted_questions, num_questions):
     llm = ChatGroq(
         model="llama-3.1-8b-instant",
         temperature=0.7,
@@ -87,7 +90,7 @@ def generate_questions(extracted_questions, num_questions):
         f"Generate {num_questions} new questions in a similar style and complexity level."
     )
     
-    response = llm.invoke(prompt)
+    response = await llm.ainvoke(prompt)
     generated_text = response.content
     
     new_questions = [q.strip() for q in generated_text.split('\n') if q.strip()]
@@ -100,7 +103,7 @@ def generate_questions(extracted_questions, num_questions):
     
     return valid_questions[:num_questions]
 
-def create_question_paper(questions, filename, set_number):
+async def create_question_paper(questions, filename, set_number):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -125,9 +128,10 @@ def create_question_paper(questions, filename, set_number):
     pdf.set_text_color(100, 100, 100)
     pdf.cell(0, 10, "Powered by QuickLearn AI", ln=True, align='C')
     
-    pdf.output(filename)
+    async with aiofiles.open(filename, 'wb') as f:
+        await f.write(pdf.output(dest='S').encode('latin-1'))
 
-def create_question_bank_pdf(text, subject):
+async def create_question_bank_pdf(text, subject):
     question_bank_dir = os.path.join(os.getcwd(), "generated_papers")
     os.makedirs(question_bank_dir, exist_ok=True)
     
@@ -170,7 +174,7 @@ def create_question_bank_pdf(text, subject):
         
         questions = [q.strip() for q in text.split('\n\n') if q.strip()]
         for q in questions:
-            q = q.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            q = q.replace('&', '&').replace('<', '<').replace('>', '>')
             p = Paragraph(q, question_style)
             elements.append(p)
         
