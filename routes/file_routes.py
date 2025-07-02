@@ -26,7 +26,7 @@ async def initialize_pinecone_index():
         if INDEX_NAME not in pinecone_client.list_indexes().names():
             pinecone_client.create_index(
                 name=INDEX_NAME,
-                dimension=1024,  # Gemini text-embedding-004 dimension
+                dimension=768,  # Gemini text-embedding-004 dimension
                 metric="cosine",
                 spec=ServerlessSpec(cloud="aws", region=Config.PINECONE_ENVIRONMENT)
             )
@@ -149,3 +149,20 @@ async def query_file():
             "answer": "I apologize, but I encountered an error while processing your query. Please try again.",
             "voice_enabled": False
         }), 500
+
+@file_bp.route("/clear_embeddings", methods=["POST"])
+async def clear_embeddings():
+    try:
+        index = await initialize_pinecone_index()
+        # Fetch all vector IDs
+        stats = index.describe_index_stats()
+        all_ids = []
+        for ns in stats.get("namespaces", {}).values():
+            all_ids.extend(ns.get("vector_count", 0) * [None])  # Placeholder for count
+        # Pinecone does not provide a direct way to list all IDs, so we assume IDs are filenames as used in upsert
+        # Instead, we can use fetch with known IDs, but here we will use delete(delete_all=True)
+        index.delete(delete_all=True)
+        return jsonify({"message": "All embeddings cleared from Pinecone."}), 200
+    except Exception as e:
+        logger.error(f"Error clearing embeddings: {str(e)}")
+        return jsonify({"error": str(e)}), 500

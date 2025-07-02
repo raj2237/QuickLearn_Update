@@ -6,33 +6,42 @@ import google.generativeai as genai
 import re
 import json
 from config import Config
+import asyncio
 
 formatter = TextFormatter()
 
 async def get_and_enhance_transcript(youtube_url, model_type='gemini'):
     try:
-        video_id = youtube_url.split('v=')[-1]
+        # Extract video ID with proper handling of query parameters
+        video_id = re.search(r'(?:v=|youtu\.be/)([^&\n?#]+)', youtube_url)
+        if not video_id:
+            print(f"Invalid YouTube URL: {youtube_url}")
+            return None, None
+        video_id = video_id.group(1)
+
+        # Fetch transcript using YouTubeTranscriptApi
         transcript = None
         language = None
-
-        for lang in ['hi', 'en']:
+        for lang in ['en', 'hi']:
             try:
-                transcript = await YouTubeTranscriptApi.get_transcript(video_id, languages=[lang])
+                transcript_data = YouTubeTranscriptApi.get_transcript(video_id, languages=[lang])
+                transcript = formatter.format_transcript(transcript_data)
                 language = lang
                 break
-            except:
+            except Exception as e:
+                print(f"Failed to fetch transcript for language {lang}: {str(e)}")
                 continue
 
         if not transcript:
+            print(f"No transcript available for video ID: {video_id}")
             return None, None
 
-        formatted_transcript = "\n".join([entry['text'] for entry in transcript])
-
+        # Enhance transcript
         prompt = f"""
         Act as a transcript cleaner. Generate a new transcript with the same context and content as the given transcript.
         If there's a revision portion, differentiate it from the actual transcript.
         Output in sentences line by line. If the transcript lacks educational content, return 'Fake transcript'.
-        Transcript: {formatted_transcript}
+        Transcript: {transcript}
         """
 
         if model_type.lower() == 'chatgroq':
@@ -48,7 +57,7 @@ async def get_and_enhance_transcript(youtube_url, model_type='gemini'):
             gemini_model = genai.GenerativeModel('gemini-2.0-flash')
             response = await gemini_model.generate_content_async(prompt)
             enhanced_transcript = response.text if hasattr(response, 'text') else str(response)
-        
+
         return enhanced_transcript, language
     except Exception as e:
         print(f"Error in get_and_enhance_transcript: {str(e)}")
@@ -109,6 +118,7 @@ async def generate_summary_and_quiz(transcript, num_questions, language, difficu
             response = await gemini_model.generate_content_async(prompt)
             response_content = response.text if hasattr(response, 'text') else str(response)
 
+        # Extract JSON from response
         json_match = re.search(r'\{.*\}', response_content, re.DOTALL)
         if json_match:
             json_str = json_match.group(0)
@@ -126,9 +136,12 @@ async def generate_summary_and_quiz(transcript, num_questions, language, difficu
 
 async def fetch_youtube_transcript(video_url):
     try:
-        video_id = video_url.split("v=")[-1]
-        transcript = await YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'hi'])
-        return " ".join([entry["text"] for entry in transcript])
+        video_id = re.search(r'(?:v=|youtu\.be/)([^&\n?#]+)', video_url)
+        if not video_id:
+            return {"error": "Invalid YouTube URL"}
+        video_id = video_id.group(1)
+        transcript_data = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'hi'])
+        return formatter.format_transcript(transcript_data)
     except Exception as e:
         return {"error": f"Error fetching transcript: {str(e)}"}
 
@@ -153,10 +166,10 @@ async def generate_mind_map(content):
         model="llama-3.1-8b-instant",
         temperature=0,
         groq_api_key=Config.GROQ_API_KEY
-    )      
+    )
 
     response = await llm.ainvoke(prompt)
-    raw_json = response.content.strip() if hasattr(response, "content") else str(response)
+    raw_json = response.content.strip() if hasattr(response, 'content') else str(response)
     cleaned_json_str = raw_json.replace("```json", "").replace("```", "").replace("\n", "").strip()
 
     try:
