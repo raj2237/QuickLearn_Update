@@ -46,7 +46,7 @@ async def get_and_enhance_transcript(youtube_url, model_type='gemini'):
 
         if model_type.lower() == 'chatgroq':
             groq_model = ChatGroq(
-                model="llama-3.1-8b-instant",
+                model="llama-3.3-70b-versatile",
                 temperature=0,
                 groq_api_key=Config.GROQ_API_KEY
             )
@@ -106,7 +106,7 @@ async def generate_summary_and_quiz(transcript, num_questions, language, difficu
 
         if model_type.lower() == 'chatgroq':
             groq_model = ChatGroq(
-                model="llama-3.1-8b-instant",
+                model="llama-3.3-70b-versatile",
                 temperature=0,
                 groq_api_key=Config.GROQ_API_KEY
             )
@@ -163,7 +163,7 @@ async def generate_mind_map(content):
     """
 
     llm = ChatGroq(
-        model="llama-3.1-8b-instant",
+        model="llama-3.3-70b-versatile",
         temperature=0,
         groq_api_key=Config.GROQ_API_KEY
     )

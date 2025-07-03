@@ -36,7 +36,7 @@ async def chat_with_transcript():
             })
 
         groq_model = ChatGroq(
-            model="llama-3.1-8b-instant",
+            model="llama-3.3-70b-versatile",
             temperature=0,
             groq_api_key=Config.GROQ_API_KEY
         )
