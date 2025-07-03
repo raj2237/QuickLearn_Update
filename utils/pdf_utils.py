@@ -78,7 +78,7 @@ async def extract_questions_from_pdf(pdf_path):
 
 async def generate_questions(extracted_questions, num_questions):
     llm = ChatGroq(
-        model="llama-3.1-8b-instant",
+        model="llama-3.3-70b-versatile",
         temperature=0.7,
         groq_api_key=Config.GROQ_API_KEY
     )
