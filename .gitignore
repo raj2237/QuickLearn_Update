@@ -1,10 +1,14 @@
 # Python
-__pycache__/
+*__pycache__/
 *.py[cod]
 *$py.class
 *.pyc
 *.pyo
 *.pyd
+
+generated_papers/
+uploads/
+
 
 # Virtual environment
 my_env/

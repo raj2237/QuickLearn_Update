@@ -65,17 +65,18 @@ async def chat_with_transcript():
     except Exception as e:
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
-@transcript_bp.route("/generate_mind_map", methods=['GET'])
+@transcript_bp.route("/generate_mind_map", methods=['POST'])
 async def generate_mind_map_endpoint():
-    video_url = request.args.get('video_url')
-
+    video_url = request.json.get('video_url')
+    print(video_url)
     if not video_url:
         return jsonify({"error": "No video URL provided"}), 400
 
     transcript = await fetch_youtube_transcript(video_url)
-    if isinstance(transcript, dict) and "error" in transcript:
-        return jsonify(transcript), 400
+    print(transcript)
+    # if transcript:
+    #     return jsonify(transcript), 400
 
     mind_map = await generate_mind_map(transcript)
-   
+    
     return jsonify(mind_map)
