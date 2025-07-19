@@ -251,3 +251,16 @@ async def query_file():
             "voice_enabled": False,
             "context": []
         }), 500
+
+@file_bp.route("/clear_embeddings", methods=["POST"])
+@async_route
+async def clear_embeddings():
+    """Clear all embeddings from the Pinecone index."""
+    try:
+        index = await initialize_pinecone_index()
+        index.delete(delete_all=True)
+        logger.info("All embeddings cleared from Pinecone index")
+        return jsonify({"message": "All embeddings cleared from Pinecone."}), 200
+    except Exception as e:
+        logger.error(f"Error clearing embeddings: {str(e)}")
+        return jsonify({"error": str(e)}), 500
