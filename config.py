@@ -15,6 +15,7 @@ class Config:
          PINECONE_API_KEY = os.getenv('PINECONE_API_KEY')
          PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT', 'us-east-1')
          SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
+         YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
          # MongoDB setup
          mongo_client = AsyncIOMotorClient(MONGODB_URI)
          db = mongo_client['quicklearnai']

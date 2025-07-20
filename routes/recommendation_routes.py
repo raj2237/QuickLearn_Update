@@ -3,9 +3,11 @@ from utils.auth_utils import validate_token_middleware
 from config import Config
 from langchain_groq import ChatGroq
 import json
-import aiohttp
 import re
-
+from duckduckgo_search import DDGS
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import aiohttp
 recommendation_bp = Blueprint('recommendation', __name__)
 
 @recommendation_bp.route('/getonly', methods=['GET'])
@@ -82,7 +84,7 @@ async def youtube_videos():
         if not data or 'topic' not in data:
             return jsonify({
                 "success": False,
-                "error": "Missing 'topics' in JSON body"
+                "error": "Missing 'topic' in JSON body"
             }), 400
         
         topics = data['topic']
@@ -92,7 +94,7 @@ async def youtube_videos():
         if not isinstance(topics, list) or not topics:
             return jsonify({
                 "success": False,
-                "error": "'topics' must be a non-empty list"
+                "error": "'topic' must be a non-empty list"
             }), 400
         
         result = {}
@@ -119,27 +121,49 @@ async def youtube_videos():
         }), 500
 
 async def search_youtube_videos(topic, max_results=3):
-    url = "https://google.serper.dev/videos"
-    payload = {"q": f"{topic} tutorial"}
-    headers = {
-        "X-API-KEY": Config.SERPER_API_KEY,
-        "Content-Type": "application/json"
-    }
+    """
+    Search for YouTube videos using YouTube Data API v3
+    """
     try:
+        url = "https://www.googleapis.com/youtube/v3/search"
+        params = {
+            'part': 'snippet',
+            'q': f"{topic} tutorial",
+            'type': 'video',
+            'maxResults': max_results,
+            'key': Config.YOUTUBE_API_KEY,
+            'order': 'relevance',
+            'videoDefinition': 'any',
+            'videoDuration': 'any'
+        }
+        
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, headers=headers) as response:
+            async with session.get(url, params=params) as response:
                 response.raise_for_status()
                 data = await response.json()
                 
-                if "videos" not in data:
-                    return []
+                video_urls = []
+                if 'items' in data:
+                    for item in data['items']:
+                        video_id = item['id']['videoId']
+                        video_url = f"https://www.youtube.com/watch?v={video_id}"
+                        video_urls.append(video_url)
                 
-                urls = [video.get("link", "") for video in data.get("videos", [])[:max_results]]
-                return urls
-    except aiohttp.ClientError as e:
-        print(f"Serper API error for {topic}: {e}")
+                return video_urls
+                
+    except Exception as e:
+        print(f"YouTube API error for {topic}: {e}")
         return []
 
 def is_valid_youtube_url(url):
-    pattern = r'^(https?://(www\.)?youtube\.com/watch\?v=[\w-]{11}|https?://youtu\.be/[\w-]{11})'
-    return bool(re.match(pattern, url))
+    """
+    Validate if the URL is a valid YouTube video URL
+    """
+    patterns = [
+        r'^https?://(?:www\.)?youtube\.com/watch\?v=[\w-]{11}',
+        r'^https?://youtu\.be/[\w-]{11}',
+        r'^https?://(?:www\.)?youtube\.com/embed/[\w-]{11}',
+        r'^https?://(?:m\.)?youtube\.com/watch\?v=[\w-]{11}'
+    ]
+    
+    return any(re.match(pattern, url) for pattern in patterns)
