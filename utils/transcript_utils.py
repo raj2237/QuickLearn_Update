@@ -15,7 +15,7 @@ def format_transcript(transcript_data):
 async def get_and_enhance_transcript(youtube_url, model_type='gemini'):
     # print(Config.GROQ_API_KEY)
     api = os.getenv("GROQ_API_KEY")
-    print(api)
+    # print(api)
     try:
         video_id_match = re.search(r'(?:v=|youtu\.be/)([^&\n?#]+)', youtube_url)
         if not video_id_match:
@@ -30,9 +30,9 @@ async def get_and_enhance_transcript(youtube_url, model_type='gemini'):
         for lang in ['en', 'hi']:
             try:
                 transcript_data = YouTubeTranscriptApi.get_transcript(video_id, languages=[lang])
-                print(transcript_data)
+                # print(transcript_data)
                 language = lang
-                print(language)
+                # print(language)
                 break
             except Exception:
                 continue
@@ -93,27 +93,46 @@ async def get_and_enhance_transcript(youtube_url, model_type='gemini'):
     except Exception as e:
         print(f"Error in get_and_enhance_transcript: {e}")
         return None, None
+
 async def generate_summary_and_quiz(transcript, num_questions, language, difficulty, model_type='gemini'):
     try:
         if 'Fake transcript' in transcript:
             return {"summary": {}, "questions": {difficulty: []}}
 
         prompt = f"""
-        Summarize the following transcript by identifying the key topics covered, and provide a detailed summary of each topic in 6-7 sentences.
-        Each topic should be labeled clearly as "Topic X", where X is the topic name. Provide the full summary for each topic in English, even if the transcript is in a different language.
-        Strictly ensure that possessives (e.g., John's book) and contractions (e.g., don't) use apostrophes (') instead of quotation marks (" or "  ").
-
-        If the transcript contains 'Fake Transcript', do not generate any quiz or summary.
-
-        After the summary, give the name of the topic on which the transcript was all about in a maximum of 2 to 3 words.
-        After summarizing, create a quiz with {num_questions} multiple-choice questions in English, based on the transcript content.
-        Only generate {difficulty} difficulty questions. Format the output in JSON format as follows, just give the JSON as output, nothing before it:
+        Analyze the following transcript and create a comprehensive structured summary along with a quiz.
+        
+        For the summary, organize it into a clear hierarchical structure with:
+        1. Main topic identification (2-3 words)
+        2. Key concepts with their explanations in about 3-5 detailed lines which users can relate technically and understand
+        3. Important points under each concept
+        4. Practical applications or examples mentioned, if the examples are not mentioned , generate 2-3 concept related examples.
+        
+        Structure the output in the following JSON format, ensuring all text uses proper apostrophes (') for possessives and contractions:
 
         {{
             "summary": {{
-                "topic1": "value1",
-                "topic2": "value2",
-                "topic3": "value3"
+                "main_topic": "Brief topic name (2-3 words)",
+                "overview": "2-3 sentence overview of the entire content",
+                "key_concepts": [
+                    {{
+                        "concept": "Concept Name",
+                        "explanation": "Clear explanation of this concept",
+                        "key_points": [
+                            "Important point 1",
+                            "Important point 2",
+                            "Important point 3"
+                        ],
+                        "examples": [
+                            "Example or application if mentioned"
+                        ]
+                    }}
+                ],
+                "takeaways": [
+                    "Main takeaway 1",
+                    "Main takeaway 2",
+                    "Main takeaway 3"
+                ]
             }},
             "questions": {{
                 "{difficulty}": [
@@ -130,6 +149,12 @@ async def generate_summary_and_quiz(transcript, num_questions, language, difficu
                 ]
             }}
         }}
+
+        Generate exactly {num_questions} multiple-choice questions at {difficulty} difficulty level based on the transcript content.
+        Ensure all content is in English regardless of the original transcript language.
+        If the transcript contains 'Fake Transcript', return empty summary and questions.
+        
+        Output ONLY the JSON, nothing else.
 
         Transcript: {transcript}
         """
@@ -194,13 +219,9 @@ async def generate_mind_map(content):
     }}
     """
 
-  
-
-    
     genai.configure(api_key=Config.GENAI_API_KEY)
     gemini_model = genai.GenerativeModel('gemini-2.0-flash')
     response = await gemini_model.generate_content_async(prompt)
-
 
     response_content = response.text if hasattr(response, 'text') else str(response)
     cleaned_json_str = response_content.replace("```json", "").replace("```", "").replace("\n", "").strip()
@@ -209,3 +230,48 @@ async def generate_mind_map(content):
         return json.loads(cleaned_json_str)
     except json.JSONDecodeError:
         return {"error": f"Invalid JSON response: {cleaned_json_str}"}
+
+# Additional utility function to format the structured summary for display
+def format_summary_for_display(summary_data):
+    """
+    Convert the structured summary JSON into a more readable format
+    """
+    if not summary_data or 'summary' not in summary_data:
+        return "No summary available"
+    
+    summary = summary_data['summary']
+    formatted_output = []
+    
+    # Main Topic and Overview
+    formatted_output.append(f"📚 **Topic:** {summary.get('main_topic', 'Unknown')}")
+    formatted_output.append(f"📝 **Overview:** {summary.get('overview', 'No overview available')}")
+    formatted_output.append("")
+    
+    # Key Concepts
+    if 'key_concepts' in summary and summary['key_concepts']:
+        formatted_output.append("🔍 **Key Concepts:**")
+        formatted_output.append("")
+        
+        for i, concept in enumerate(summary['key_concepts'], 1):
+            formatted_output.append(f"**{i}. {concept.get('concept', 'Unnamed Concept')}**")
+            formatted_output.append(f"   {concept.get('explanation', 'No explanation available')}")
+            
+            if concept.get('key_points'):
+                formatted_output.append("   **Key Points:**")
+                for point in concept['key_points']:
+                    formatted_output.append(f"   • {point}")
+            
+            if concept.get('examples'):
+                formatted_output.append("   **Examples:**")
+                for example in concept['examples']:
+                    formatted_output.append(f"   → {example}")
+            
+            formatted_output.append("")
+    
+    # Main Takeaways
+    if 'takeaways' in summary and summary['takeaways']:
+        formatted_output.append("💡 **Key Takeaways:**")
+        for takeaway in summary['takeaways']:
+            formatted_output.append(f"• {takeaway}")
+    
+    return "\n".join(formatted_output)

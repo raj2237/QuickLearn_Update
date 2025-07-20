@@ -227,15 +227,14 @@ async def query_file():
         cleaned_response = clean_response(response.text)
         
         logger.info("Generating speech for response...")
-        # Start TTS in a thread without awaiting
         tts_thread = tts_manager.start_speaking(cleaned_response)
-        # Optionally wait briefly to ensure thread starts
-        tts_thread.join(timeout=0.1)  # Non-blocking, allows thread to start
+        tts_thread.join(timeout=0.1)  # Brief wait to ensure thread starts
+        voice_enabled = tts_thread.is_alive()  # Check if TTS thread is running
         
         logger.info(f"Query took {time.time() - start_time:.2f} seconds")
         return jsonify({
             "answer": cleaned_response,
-            "voice_enabled": True,
+            "voice_enabled": voice_enabled,
             "context": {
                 "source": filename,
                 "relevant_lines": context_lines,
@@ -251,7 +250,7 @@ async def query_file():
             "voice_enabled": False,
             "context": []
         }), 500
-
+    
 @file_bp.route("/clear_embeddings", methods=["POST"])
 @async_route
 async def clear_embeddings():

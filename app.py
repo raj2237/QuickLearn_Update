@@ -54,26 +54,10 @@ app = create_app()
 asgi_app = WsgiToAsgi(app)
 
 if __name__ == '__main__':
-    # Check if we're in development mode
-    debug_mode = os.getenv('FLASK_ENV') == 'development' or os.getenv('DEBUG', 'False').lower() == 'true'
-    
-    if debug_mode:
-        # Use Flask's built-in development server with auto-reload
-        print("Running in development mode with Flask dev server...")
-        app.run(
-            host="0.0.0.0", 
-            port=5001, 
-            debug=True,  # Enables auto-reload and better error messages
-            threaded=True
-        )
-    else:
-        # Use Uvicorn for production
-        import uvicorn
-        print("Running in production mode with Uvicorn...")
-        uvicorn.run(
-            "app:asgi_app", 
-            host="0.0.0.0", 
-            port=5001, 
-            workers=4,
-            reload=True # Disable reload in production
-        )
+    import uvicorn
+    uvicorn.run(
+        "app:asgi_app",
+        host="127.0.0.1",  # localhost
+        port=5001,
+        reload=True  # Enable hot reload in development
+    )
