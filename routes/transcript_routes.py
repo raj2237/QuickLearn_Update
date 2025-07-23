@@ -3,8 +3,9 @@ from utils.transcript_utils import get_and_enhance_transcript, fetch_youtube_tra
 from langchain.prompts import PromptTemplate
 from config import Config
 from langchain_groq import ChatGroq
-
+import google.generativeai as genai
 transcript_bp = Blueprint('transcript', __name__)
+from google.protobuf.json_format import MessageToDict
 
 @transcript_bp.route('/chat_trans', methods=['POST', 'OPTIONS'])
 async def chat_with_transcript():
@@ -17,7 +18,7 @@ async def chat_with_transcript():
             return jsonify({'error': 'No JSON data provided'}), 400
 
         youtube_link = data.get('link')
-        model_type = data.get('model', 'chatgroq')
+        model_type = data.get('model', 'gemini')
         question = data.get('question')
 
         if not youtube_link:
@@ -35,11 +36,15 @@ async def chat_with_transcript():
                 'status': 'success'
             })
 
-        groq_model = ChatGroq(
-            model="llama-3.3-70b-versatile",
-            temperature=0,
-            groq_api_key=Config.GROQ_API_KEY
-        )
+        # groq_model = ChatGroq(
+        #     model="llama-3.3-70b-versatile",
+        #     temperature=0,
+        #     groq_api_key=Config.GROQ_API_KEY
+        # )
+
+        genai.configure(api_key=Config.GENAI_API_KEY)
+        gemini_model = genai.GenerativeModel('gemini-2.0-flash')
+        
 
         prompt_template = PromptTemplate(
             input_variables=["transcript", "question"],
@@ -55,10 +60,16 @@ async def chat_with_transcript():
             question=question
         )
 
-        response = await groq_model.ainvoke(formatted_prompt)
+        response = await gemini_model.generate_content_async(formatted_prompt)
+
+# Get the first candidate's text directly
+        generated_text = response.candidates[0].content.parts[0].text
+
+        # Clean unwanted formatting
+        cleaned_text = generated_text.replace('**', '').replace('\n', ' ').strip()
 
         return jsonify({
-            'answer': response.content,
+            'answer': cleaned_text,
             'status': 'success'
         })
 
